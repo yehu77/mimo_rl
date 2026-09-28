@@ -70,22 +70,28 @@ def fetch_code_data(revision: str, output_dir: Path) -> Dict[str, object]:
             old = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise DataFetchError(f"invalid existing manifest {manifest_path}: {exc}") from exc
+        if old.get("dataset") != DATASET:
+            raise DataFetchError("existing download manifest belongs to another dataset")
         if old.get("revision") != revision:
             raise DataFetchError("existing download manifest belongs to another revision; choose a new output directory")
         files = old.get("files")
-        valid_file_entries = isinstance(files, list) and all(
-            isinstance(item, dict) and isinstance(item.get("path"), str) and isinstance(item.get("sha256"), str)
+        valid_file_entries = isinstance(files, list) and len(files) == len(FILES) and all(
+            isinstance(item, dict)
+            and item.get("path") in FILES
+            and isinstance(item.get("sha256"), str)
+            and isinstance(item.get("size_bytes"), int)
+            and item.get("revision") == revision
             for item in files
         )
-        if valid_file_entries and all((output_dir / item["path"]).exists() for item in files):
-            valid = True
-            for item in files:
-                target = output_dir / str(item["path"])
-                if _sha256(target) != item.get("sha256"):
-                    valid = False
-                    break
-            if valid and {item.get("path") for item in files} == set(FILES):
-                return old
+        if not valid_file_entries or {item["path"] for item in files} != set(FILES):
+            raise DataFetchError("existing download manifest is malformed or incomplete")
+        for item in files:
+            target = output_dir / item["path"]
+            if not target.exists():
+                raise DataFetchError(f"cached file is missing: {item['path']}")
+            if target.stat().st_size != item["size_bytes"] or _sha256(target) != item["sha256"]:
+                raise DataFetchError(f"cached file does not match manifest: {item['path']}")
+        return old
     elif any((output_dir / filename).exists() for filename in FILES):
         raise DataFetchError("data files exist without a manifest; remove or move them before downloading")
 
