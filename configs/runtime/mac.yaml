@@ -1,0 +1,7 @@
+platform: macos
+python: ".venv/bin/python"
+data_dir: "./artifacts/data/raw"
+model_path: null
+service_url: null
+gpu_devices: []
+notes: "B001 CPU/data bootstrap only; no model, service, GPU or training configuration is set."

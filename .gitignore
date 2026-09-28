@@ -1,0 +1,32 @@
+# Local environments and credentials
+.venv/
+venv/
+.env
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+# Data, model, container and runtime artifacts
+artifacts/data/raw/
+artifacts/data/download_manifest.json
+artifacts/data/*.parquet
+artifacts/data/*.jsonl
+runs/**
+!runs/.gitkeep
+weights/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.log
+
+# Build output
+build/
+dist/
+*.egg-info/

@@ -1,0 +1,7 @@
+platform: linux-gpu
+python: null
+data_dir: null
+model_path: null
+service_url: null
+gpu_devices: []
+notes: "Fill on the target Linux/NVIDIA host after compatibility checks; paths and credentials are intentionally unset."

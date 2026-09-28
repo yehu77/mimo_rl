@@ -1,0 +1,16 @@
+dataset:
+  name: XiaomiMiMo/MiMo-V2.6-RL-oss
+  revision: 639865fd3374018d6cb29b9fb82dd531406fcf5f
+  files:
+    - code.parquet
+    - image-mapping.jsonl
+training:
+  slime:
+    commit: null
+    reason: "B001 records the source choice only; no training framework was fetched or tested."
+  mimoagent:
+    commit: null
+    reason: "B001 records the source choice only; no execution layer was fetched or tested."
+  official_recipe:
+    commit: null
+    reason: "B001 records the source choice only; no recipe was fetched or tested."

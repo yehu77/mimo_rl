@@ -1,0 +1,22 @@
+{
+  "dataset": "XiaomiMiMo/MiMo-V2.6-RL-oss",
+  "files": {
+    "code.parquet": {
+      "path": "artifacts/data/raw/code.parquet",
+      "revision": "639865fd3374018d6cb29b9fb82dd531406fcf5f",
+      "sha256": "e15733cf2451cfbc5492a4120f7f8cfddbad818aa9f0b324c79888dd1fece161",
+      "size_bytes": 13314620
+    },
+    "image-mapping.jsonl": {
+      "path": "artifacts/data/raw/image-mapping.jsonl",
+      "revision": "639865fd3374018d6cb29b9fb82dd531406fcf5f",
+      "sha256": "704ad2716d746430a805b9b1ac7c6725aea2117fd8e4823ebe9d339d0313ad58",
+      "size_bytes": 495593
+    }
+  },
+  "revision": "639865fd3374018d6cb29b9fb82dd531406fcf5f",
+  "source_urls": {
+    "code.parquet": "https://huggingface.co/datasets/XiaomiMiMo/MiMo-V2.6-RL-oss/resolve/639865fd3374018d6cb29b9fb82dd531406fcf5f/code.parquet",
+    "image-mapping.jsonl": "https://huggingface.co/datasets/XiaomiMiMo/MiMo-V2.6-RL-oss/resolve/639865fd3374018d6cb29b9fb82dd531406fcf5f/image-mapping.jsonl"
+  }
+}

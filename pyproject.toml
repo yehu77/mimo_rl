@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mimo-rl"
+version = "0.1.0"
+description = "Portable data and validation bootstrap for MiMo code-agent RL"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+authors = [{name = "mimo_rl contributors"}]
+
+[project.optional-dependencies]
+dev = [
+  "pyarrow==14.0.2; python_version < '3.10' or python_version >= '3.10'",
+  "numpy<2",
+  "pytest>=7,<9",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,86 @@
+{
+  "column_names": [
+    "data_source",
+    "ability",
+    "agent_name",
+    "prompt",
+    "reward_model",
+    "extra_info"
+  ],
+  "columns": [
+    {
+      "fields": [],
+      "name": "data_source",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "fields": [],
+      "name": "ability",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "fields": [],
+      "name": "agent_name",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "fields": [
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<element: struct<content: string, role: string>>"
+        }
+      ],
+      "name": "prompt",
+      "nullable": true,
+      "type": "list<element: struct<content: string, role: string>>"
+    },
+    {
+      "fields": [
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<ground_truth: string>"
+        },
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<style: string>"
+        }
+      ],
+      "name": "reward_model",
+      "nullable": true,
+      "type": "struct<ground_truth: string, style: string>"
+    },
+    {
+      "fields": [
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<dataset_type: string>"
+        },
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<index: int64>"
+        },
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<instance_id: string>"
+        },
+        {
+          "nullable": true,
+          "type": "pyarrow.Field<instance_json: string>"
+        }
+      ],
+      "name": "extra_info",
+      "nullable": true,
+      "type": "struct<dataset_type: string, index: int64, instance_id: string, instance_json: string>"
+    }
+  ],
+  "format": "parquet",
+  "required_columns_present": {
+    "extra_info": true,
+    "prompt": true,
+    "reward_model": true
+  },
+  "rows": 2698
+}
