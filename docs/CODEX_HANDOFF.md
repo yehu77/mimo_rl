@@ -6,11 +6,13 @@
 
 历史说明（截至本文初始提交）：准备本文的 ChatGPT 尚未读取 `yehu77/mimo_rl` 的文件、分支或 commit，GitHub 写入连接也尚未建立。B001 已完成真实仓库检查、实现、数据检查并推送；不要把这段历史状态当作当前状态。Notion 记录的 0/36 是此前验收快照，不是对当前工作区的检查结论。
 
-## 当前批次：B001-R1（GitHub Issue #2）
+## 当前批次：B002（GitHub Issue #4）
 
-评审基线：`898b5f8`，修复分支：`codex/b001-r1`，目标 PR 的 base：`codex/b001-mac-bootstrap`。
+评审基线：`ba30dbf422c81139653f00bd0f05f76da1f88955`，工作分支：`codex/b002-task-contract`，目标 PR base：`codex/b001-r1`。
 
-本轮只修复 B001 review 发现的数据检查漏报、来源 provenance 绑定和完整样本资产隔离，补充原生 Parquet/CLI 回归测试，并重跑固定 revision 的真实数据检查与干净环境测试。不要启动 B002、Docker、模型、任务容器、训练或 GAR。B001 的原始结果保留在 `reports/handoffs/B001.md`，R1 结果追加在同一文件。
+Issue #4 授权本批次推进：先修复 unmatched image 详情绑定，再只读固定官方 recipe、mimoagent/uni-agent 子模块和 slime 源码，建立 `docs/UPSTREAM_CONTRACT.md`，实现轻量 TaskBundle、solver/verifier 隔离和 `prepare_code_tasks.py`，复用严格 provenance 检查完成固定真实数据合同检查。保留 R1 回归；本轮不启动 Docker、模型、任务容器、官方 loader runtime、agent loop 或训练。B001 原始结果和 R1 记录保留在 `reports/handoffs/B001.md`。
+
+本段取代旧的 B001-R1 当前批次限制；旧批次段落仍作为历史交接保留，不再约束本批次。
 
 ## 1. 给 Codex 的项目背景
 
