@@ -147,3 +147,42 @@ manifest、真实文件 hash 和全部 2698 条输入，再逐条构造 `TaskBun
 本文件的源码合同核对不代表 official loader runtime、Docker、模型、agent loop、
 容器 verifier、slime/SGLang、rollout、参数更新或训练已通过；这些在
 `reports/handoffs/B002.md` 中保持 `NOT_RUN`。
+
+## B003 轨迹导出合同（source_read）
+
+B003 只实现一个不依赖上游包的原始调用记录和离线编译器。下面的文件是在
+固定 slime `89bfada990a00663846e0ac804de1454685ceed3`、Uni-Agent
+`c63e0b01c375ebede95e01fe92bc367df24e5bf3` 上读取的源码；链接和行号用于
+复核实际符号，不表示本机加载了这些模块或运行了官方引擎。
+
+* slime 的 [`Sample.append_response_tokens`](https://github.com/THUDM/slime/blob/89bfada990a00663846e0ac804de1454685ceed3/slime/utils/types.py#L268-L391)
+  把追加的 token 计入 `response_length`。可训练 token 必须有同长度的原始
+  `rollout_log_probs`；非生成/不可训练段使用 `loss_mask=0` 和 `0.0` 占位。
+  `effective_response_length` 是 `sum(loss_mask)`，而
+  [`_validate_response_metadata_lengths`](https://github.com/THUDM/slime/blob/89bfada990a00663846e0ac804de1454685ceed3/slime/utils/types.py#L542-L553)
+  要求 `loss_mask` 与 `rollout_log_probs` 都精确等于 `response_length`。
+* 固定的 [`sglang_rollout`](https://github.com/THUDM/slime/blob/89bfada990a00663846e0ac804de1454685ceed3/slime/rollout/sglang_rollout.py#L172-L253)
+  请求 `return_logprob=True`，从 `output_token_logprobs` 读取每个真实生成
+  token 的 `(logprob, token_id)`，再交给 `append_response_tokens`。B003 因此
+  不会用零填充来掩盖模型生成位置的概率缺失。
+* Uni-Agent 固定的 [`GatewaySession.run_generation`](https://github.com/XiaomiMiMo/uni-agent/blob/c63e0b01c375ebede95e01fe92bc367df24e5bf3/uni_agent/gateway/session/session.py#L224-L300)
+  返回 backend 的 token ids 与概率；[`_prepare_generation_inputs`](https://github.com/XiaomiMiMo/uni-agent/blob/c63e0b01c375ebede95e01fe92bc367df24e5bf3/uni_agent/gateway/session/session.py#L443-L565)
+  会把上下文续接为输入，并对输入/工具位置使用 mask 0 和 0.0。其
+  [`_assert_response_logprob_alignment`](https://github.com/XiaomiMiMo/uni-agent/blob/c63e0b01c375ebede95e01fe92bc367df24e5bf3/uni_agent/gateway/session/session.py#L725-L729)
+  只允许空值或与响应长度完全一致的概率数组。
+
+本项目的 `src/mimo_rl/trajectory.py` 对这些语义做了轻量映射：每个
+`GenerationEvent` 保存一次调用的完整输入前缀、输出 token、原始概率和
+policy 版本；`compile_single_context_trace` 只接受单 context 的 append-only
+前缀，新增输入/工具 token 固定为 `mask=0, logprob=0.0`，生成 token 固定为
+`mask=1` 并要求真实概率。B003 仅支持 `temperature=1.0`、`top_p=1.0`、
+`top_k=0`、`repetition_penalty=1.0` 的 full-vocabulary 概率；其它采样合同
+会被离线检查拒绝。`inspect_trajectory.py` 只读取本地 JSON/JSONL 并输出
+脱敏摘要，`--export-training` 仍会拒绝 synthetic、缺失 engine 原始捕获证据、
+概率/长度不一致、身份混用和不完整 group，且始终 `parameter_update=false`。
+
+这些是固定源码和结构测试得出的合同（`validation_scope=source_read`）。本轮
+没有启动 SGLang、Uni-Agent、slime、官方 loader、模型或训练，因此不存在真实
+engine capture、真实 rollout 或参数更新的 runtime 通过证据；带
+`capture_evidence=engine_raw` 的单元 fixture 只验证拒绝规则的形状，不能冒充
+官方运行结果。
