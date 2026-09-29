@@ -198,6 +198,46 @@ def test_export_rejects_synthetic_and_accepts_only_complete_consistent_captured_
     assert any(item["code"] == "group_identity_conflict" for item in check_training_export(bad)["reasons"])
 
 
+def test_empty_export_is_rejected_and_completed_test_fail_is_legal() -> None:
+    empty = check_training_export([])
+    assert empty["eligible"] is False
+    assert empty["reasons"][0]["code"] == "empty_training_export"
+    record = compile_single_context_trace(
+        _trace(
+            _event(0, [1], [2], [-0.2], policy="policy-v1"),
+            source="captured",
+            outcome=TEST_FAIL_OUTCOME,
+            expected=1,
+            capture_evidence="engine_raw",
+        )
+    )
+    assert check_training_export([record])["eligible"] is True
+
+
+def test_direct_export_rechecks_sampling_and_allows_independent_contexts() -> None:
+    records = []
+    for index in range(2):
+        records.append(
+            compile_single_context_trace(
+                _trace(
+                    _event(0, [1], [2 + index], [-0.2], policy="policy-v1"),
+                    source="captured",
+                    group="group-independent",
+                    rollout=f"rollout-independent-{index}",
+                    context=f"context-independent-{index}",
+                    outcome=PASS_OUTCOME,
+                    expected=2,
+                    capture_evidence="engine_raw",
+                )
+            )
+        )
+    assert check_training_export(records)["eligible"] is True
+    altered = copy.deepcopy(records)
+    altered[0]["sampling_config"]["temperature"] = 0.7
+    reasons = check_training_export(altered)["reasons"]
+    assert any(item["code"] == "unsupported_sampling_config" for item in reasons)
+
+
 def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
     records = []
     for index in range(2):
