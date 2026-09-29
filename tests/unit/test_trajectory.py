@@ -327,3 +327,20 @@ def test_cli_rejects_missing_generation_probability_without_zero_fill(tmp_path: 
     payload = json.loads(result.stdout)
     assert payload["status"] == "NOT_TRAINABLE"
     assert any(item["code"] == "missing_generation_log_probs" for item in payload["errors"])
+
+
+@pytest.mark.parametrize("content", ["[]\n", "\n"])
+def test_cli_rejects_empty_json_and_jsonl_exports(tmp_path: Path, content: str) -> None:
+    trace_path = tmp_path / "empty.jsonl"
+    trace_path.write_text(content, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "inspect_trajectory.py"), "--input", str(trace_path), "--export-training"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "EXPORT_REJECTED"
+    assert "empty_training_export" in payload["export_decision"]["reason_codes"]
