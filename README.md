@@ -25,6 +25,10 @@ python3 -m venv .venv
 .venv/bin/pytest -q
 ```
 
+B002 also records the tested Python 3.9.6 dependency set in
+[`requirements-dev.lock`](requirements-dev.lock). A clean core-data rebuild may
+install that file first and then run `.venv/bin/python -m pip install -e .`.
+
 The runtime dependencies are intentionally small: `pyarrow==14.0.2`, `numpy<2` (for the Python 3.9 arm64 wheel), and pytest. Importing `mimo_rl` only loads standard-library code and does not access the network or a GPU.
 
 ## Fetch and inspect the official code files
