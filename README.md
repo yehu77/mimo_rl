@@ -4,6 +4,12 @@
 
 B001-R1 hardens the same data-only boundary after review: fatal findings share one status function between the report and CLI, every anomaly keeps source row or mapping line indices, and official-source checks bind both input files to a verified download manifest.
 
+## B002 status
+
+B002 adds a source-only contract boundary for the fixed code dataset. Unmatched-image diagnostics retain both the image and every source row index; the regression suite exercises two unmatched images with one repeated in a native Parquet file. Fixed upstream references and the read-only file/symbol contract are recorded in [`manifests/versions.yaml`](manifests/versions.yaml) and [`docs/UPSTREAM_CONTRACT.md`](docs/UPSTREAM_CONTRACT.md).
+
+`TaskBundle` separates the allowlisted solver request, pending runtime routing metadata, and private verifier fields. `scripts/prepare_code_tasks.py` checks the complete fixed dataset against its verified manifest and writes only field summaries and hashes by default. A full controller bundle is written only when one explicit task ID is selected with `--write-private`; it remains under the ignored `artifacts/tasks/` directory. This batch does not install or run the official loader, Docker, a model, an agent loop, slime, or training.
+
 ## B001 status
 
 - Base source: `chatgpt/b001-handoff` at `cac2725629af889bc48c9348c88d98c1aa2481f6`.
@@ -24,6 +30,10 @@ python3 -m venv .venv
 .venv/bin/python -c 'import mimo_rl; print(mimo_rl.__version__)'
 .venv/bin/pytest -q
 ```
+
+B002 also records the tested Python 3.9.6 dependency set in
+[`requirements-dev.lock`](requirements-dev.lock). A clean core-data rebuild may
+install that file first and then run `.venv/bin/python -m pip install -e .`.
 
 The runtime dependencies are intentionally small: `pyarrow==14.0.2`, `numpy<2` (for the Python 3.9 arm64 wheel), and pytest. Importing `mimo_rl` only loads standard-library code and does not access the network or a GPU.
 
@@ -52,8 +62,21 @@ The downloader accepts an immutable 40-character dataset commit and fetches exac
   --strict-provenance --write-samples
 ```
 
+To validate and catalogue all code tasks after the source check, use the same fixed revision and manifest:
+
+```bash
+.venv/bin/python scripts/prepare_code_tasks.py \
+  --parquet artifacts/data/raw/code.parquet \
+  --mapping artifacts/data/raw/image-mapping.jsonl \
+  --manifest artifacts/data/raw/download_manifest.json \
+  --revision 639865fd3374018d6cb29b9fb82dd531406fcf5f \
+  --output-dir artifacts/tasks
+```
+
+The default catalogue contains no complete test patch or test command. For a local controller-contract inspection, add `--task-id <id> --write-private`; the selected private JSON is ignored and is never executed by the script.
+
 `inspect_dataset.py` writes `schema.json`, `sample_records_summary.json`, `validation_summary.json`, and `provenance.json` by default. It preserves source row indices for malformed JSON, missing or duplicate identifiers, invalid prompt/reward/extra types, empty prompts or images, and mapping failures. `--write-samples` writes complete local samples only when explicitly requested. `--strict-provenance` requires the auto-discovered `download_manifest.json` beside the inputs (or a path supplied with `--manifest`) and fails on dataset, revision, filename, size, or SHA-256 mismatch. Without a manifest, structural checks remain available but provenance is reported as `UNVERIFIED`. The mapping report derives the observed `dataset_image` → `dockerhub_image` relationship from the file; it does not invent task image names or a verifier registry.
 
 ## Scope boundary
 
-`configs/runtime/mac.yaml` is a path-and-capability record for local data work. `configs/runtime/linux_gpu.example.yaml` intentionally leaves model, service, and GPU paths unset. `manifests/versions.yaml` records the chosen upstream source references; slime, mimoagent, and the official recipe remain `null` until their exact commits are inspected. Docker was not available on the Mac used for B001. No model was loaded, no task container was started, and no RL parameter update occurred.
+`configs/runtime/mac.yaml` is a path-and-capability record for local data work. `configs/runtime/linux_gpu.example.yaml` intentionally leaves model, service, and GPU paths unset. `manifests/versions.yaml` records exact upstream source commits read for B002; their scope is `source_read` only and `runtime_tested` remains false. Docker was not available on the Mac used for B001/B002. No model was loaded, no task container or official loader was started, and no RL parameter update occurred.

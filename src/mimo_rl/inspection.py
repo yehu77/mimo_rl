@@ -192,7 +192,7 @@ def _mapping_inspection(
         for image, indices in sorted(unmatched_by_image.items())
     ]
     unmatched_issues = [
-        _issue(index, "unmatched_docker_image", "docker_image has no mapping entry", image=image)
+        _issue(index, "unmatched_docker_image", "docker_image has no mapping entry", image=item["image"])
         for item in unmatched
         for index in item["record_indices"]
     ]
@@ -326,11 +326,18 @@ def validation_status(summary: Mapping[str, Any]) -> Dict[str, Any]:
     groups: Dict[str, Dict[str, Any]] = {}
     for item in issues:
         code = str(item.get("code", "unknown"))
-        group = groups.setdefault(code, {"code": code, "count": 0, "record_indices": []})
+        group = groups.setdefault(code, {"code": code, "count": 0, "record_indices": [], "records": []})
         group["count"] += 1
         index = item.get("record_index")
         if index is not None and index not in group["record_indices"]:
             group["record_indices"].append(index)
+        evidence = {
+            key: item[key]
+            for key in ("record_index", "image", "instance_id", "dataset_image", "mapping_line_indices")
+            if key in item
+        }
+        if evidence and evidence not in group["records"]:
+            group["records"].append(evidence)
     findings = sorted(groups.values(), key=lambda item: item["code"])
     return {
         "status": "PASS" if not issues else "FAIL",

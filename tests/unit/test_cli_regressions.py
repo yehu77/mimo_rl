@@ -134,6 +134,33 @@ def test_cli_preserves_all_repeated_unmatched_record_indices(tmp_path: Path) -> 
     assert finding["record_indices"] == [0, 1]
 
 
+def test_cli_binds_each_unmatched_issue_to_its_image(tmp_path: Path) -> None:
+    rows = [
+        _valid_row("task-0", "unmatched-a"),
+        _valid_row("task-1", "unmatched-a"),
+        _valid_row("task-2", "unmatched-b"),
+    ]
+    parquet, mapping, output = _write_case(
+        tmp_path,
+        rows,
+        [{"dataset_image": "known-image", "dockerhub_image": "docker.io/example/known:latest"}],
+    )
+    result = _run_cli(parquet, mapping, output, "--revision", REVISION)
+    payload = _payload(result)
+    assert result.returncode == 1
+    summary = json.loads((output / "validation_summary.json").read_text(encoding="utf-8"))
+    assert summary["mapping"]["unmatched_instance_images"] == [
+        {"image": "unmatched-a", "record_indices": [0, 1], "count": 2},
+        {"image": "unmatched-b", "record_indices": [2], "count": 1},
+    ]
+    finding = next(item for item in payload["blocking_findings"] if item["code"] == "unmatched_docker_image")
+    assert finding["records"] == [
+        {"record_index": 0, "image": "unmatched-a"},
+        {"record_index": 1, "image": "unmatched-a"},
+        {"record_index": 2, "image": "unmatched-b"},
+    ]
+
+
 def _write_manifest(parquet: Path, mapping: Path, revision: str = REVISION) -> Path:
     def digest(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()

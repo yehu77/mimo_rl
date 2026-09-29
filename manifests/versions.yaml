@@ -6,11 +6,45 @@ dataset:
     - image-mapping.jsonl
 training:
   slime:
-    commit: null
-    reason: "B001 records the source choice only; no training framework was fetched or tested."
+    repo: "THUDM/slime"
+    commit: "89bfada990a00663846e0ac804de1454685ceed3"
+    default_branch: "main"
+    python: ">=3.10 target (pyproject declares 3.10 target)"
+    checked_at: "2026-09-29"
+    validation_scope: "source_read"
+    runtime_tested: false
+    path_notes: "Rollout/Sample contract only; no install, import, GPU or training run."
   mimoagent:
-    commit: null
-    reason: "B001 records the source choice only; no execution layer was fetched or tested."
+    repo: "XiaomiMiMo/MiMo-Agent"
+    commit: "467f0a19016f0ac4d63b8d17a1f0da9ba07f232c"
+    default_branch: "mimo-oss"
+    python: "==3.12.*"
+    checked_at: "2026-09-29"
+    validation_scope: "source_read"
+    runtime_tested: false
+    path_notes: "OpenSourceCodeEnvironment and dataset adapters read from this commit; no package install or container run."
+  uni_agent:
+    repo: "XiaomiMiMo/uni-agent"
+    commit: "c63e0b01c375ebede95e01fe92bc367df24e5bf3"
+    default_branch: "mimo-oss"
+    python: ">=3.10"
+    checked_at: "2026-09-29"
+    validation_scope: "source_read"
+    runtime_tested: false
+    path_notes: "Submodule gitlink selected by the fixed verl tree; task/session contracts only."
   official_recipe:
-    commit: null
-    reason: "B001 records the source choice only; no recipe was fetched or tested."
+    repo: "XiaomiMiMo/verl"
+    commit: "a2ad9f6160b03ff2d47e59832bfb6b289f37c917"
+    default_branch: "mimo-oss"
+    python: ">=3.10"
+    checked_at: "2026-09-29"
+    validation_scope: "source_read"
+    runtime_tested: false
+    path_notes: "recipes/code and scripts/code were read; no verl/slime install or launcher execution."
+  official_recipe_submodule:
+    repo: "verl-project/verl-recipe"
+    commit: "e7f889574b8301cc0f0fc1d57c6d67f31ffeb689"
+    selected_by: "XiaomiMiMo/verl .gitmodules + recipe gitlink at official_recipe commit"
+    checked_at: "2026-09-29"
+    validation_scope: "source_read"
+    runtime_tested: false
