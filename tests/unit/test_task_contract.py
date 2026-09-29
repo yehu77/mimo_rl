@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from mimo_rl.inspection import DATASET
-from mimo_rl.task import MappingEntry, TaskBundle, TaskContractError, load_image_mapping
+from mimo_rl.task import MappingEntry, RuntimeSpec, TaskBundle, TaskContractError, load_image_mapping
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -187,6 +187,24 @@ def test_from_record_rejects_unverified_runtime_declarations(value: object) -> N
     with pytest.raises(TaskContractError) as exc_info:
         TaskBundle.from_record(_row(_instance(repo_identity=value)), source_row_index=0, data_revision=REVISION, mapping=_mapping())
     assert "invalid_runtime_declaration" in {item["code"] for item in exc_info.value.errors}
+
+
+def test_runtime_pending_state_is_immutable_and_complete() -> None:
+    with pytest.raises(TaskContractError) as exc_info:
+        RuntimeSpec(
+            dataset_image="dataset-image:latest",
+            dockerhub_image="docker.io/example/task:1",
+            cwd="/testbed",
+            data_revision=REVISION,
+            source_row_index=0,
+            source_extra_info_index=17,
+            mapping_line_indices=(3,),
+            repo_identity=None,
+            base_ref=None,
+            image_digest=None,
+            pending_runtime=["repo_identity", "base_ref", "image_digest"],  # type: ignore[arg-type]
+        )
+    assert "invalid_pending_runtime" in {item["code"] for item in exc_info.value.errors}
 
 
 def test_direct_solver_construction_revalidates_messages_and_defensively_exports() -> None:

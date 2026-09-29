@@ -283,7 +283,9 @@ class RuntimeSpec:
             value = getattr(self, field)
             if value is not None and (not isinstance(value, str) or not value.strip()):
                 raise TaskContractError([_error("invalid_runtime_declaration", f"{field} must be null or a non-empty declared string")])
-        if tuple(self.pending_runtime) != _RUNTIME_PENDING_FIELDS:
+        if not isinstance(self.pending_runtime, tuple):
+            raise TaskContractError([_error("invalid_pending_runtime", "pending_runtime must be an immutable tuple")])
+        if self.pending_runtime != _RUNTIME_PENDING_FIELDS:
             raise TaskContractError([_error("pending_runtime_mismatch", "pending_runtime must remain PENDING until runtime evidence is observed")])
 
 
