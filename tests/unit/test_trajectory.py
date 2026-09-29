@@ -27,6 +27,26 @@ SAMPLING = {
     "repetition_penalty": 1.0,
     "probability_mode": "full_vocab",
 }
+PASS_OUTCOME = {
+    "schema_version": 1,
+    "status": "PASS",
+    "raw_reward": 1.0,
+    "reward": 1.0,
+    "raw_error_category": None,
+    "verifier_returncode": 0,
+    "resolved": True,
+    "completion_evidence": "official_verifier_returncode",
+}
+TEST_FAIL_OUTCOME = {
+    "schema_version": 1,
+    "status": "TEST_FAIL",
+    "raw_reward": 0.0,
+    "reward": 0.0,
+    "raw_error_category": None,
+    "verifier_returncode": 1,
+    "resolved": False,
+    "completion_evidence": "official_verifier_returncode",
+}
 
 
 def _event(step: int, input_ids: list[int], output_ids: list[int], probs: list[float] | None, *, policy: str = "synthetic-policy-v1", event_id: str | None = None) -> GenerationEvent:
@@ -42,14 +62,14 @@ def _event(step: int, input_ids: list[int], output_ids: list[int], probs: list[f
     )
 
 
-def _trace(*events: GenerationEvent, source: str = "synthetic", group: str = "group-0", rollout: str = "rollout-0", outcome: dict | None = None, expected: int | None = None, capture_evidence: str | None = None) -> Trajectory:
+def _trace(*events: GenerationEvent, source: str = "synthetic", group: str = "group-0", rollout: str = "rollout-0", context: str = "context-0", outcome: dict | None = None, expected: int | None = None, capture_evidence: str | None = None) -> Trajectory:
     return Trajectory(
         schema_version=1,
         source_kind=source,
         task_id="task-0",
         group_id=group,
         rollout_id=rollout,
-        context_id="context-0",
+        context_id=context,
         policy_name="synthetic-policy-v1" if source == "synthetic" else "policy-9b",
         policy_version="synthetic-policy-v1" if source == "synthetic" else "policy-v1",
         tokenizer_fingerprint="tok-fp",
@@ -163,7 +183,7 @@ def test_export_rejects_synthetic_and_accepts_only_complete_consistent_captured_
             source="captured",
             group="group-real",
             rollout=f"rollout-{index}",
-            outcome={"status": "success"},
+            outcome=PASS_OUTCOME,
             expected=2,
             capture_evidence="engine_raw",
         )
@@ -188,7 +208,7 @@ def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
                     source="captured",
                     group="group-contract",
                     rollout=f"rollout-contract-{index}",
-                    outcome={"status": "success"},
+            outcome=PASS_OUTCOME,
                     expected=2,
                     capture_evidence="engine_raw",
                 )
@@ -205,7 +225,11 @@ def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
 
     mixed_context = copy.deepcopy(records)
     mixed_context[1]["context_id"] = "other-context"
-    assert "group_identity_conflict" in {item["code"] for item in check_training_export(mixed_context)["reasons"]}
+    assert check_training_export(mixed_context)["eligible"] is True
+
+    mixed_task = copy.deepcopy(records)
+    mixed_task[1]["task_id"] = "other-task"
+    assert "group_identity_conflict" in {item["code"] for item in check_training_export(mixed_task)["reasons"]}
 
     unhashable_rollout_id = copy.deepcopy(records)
     unhashable_rollout_id[0]["rollout_id"] = ["bad"]
