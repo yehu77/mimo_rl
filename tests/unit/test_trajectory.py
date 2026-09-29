@@ -121,6 +121,13 @@ def test_append_only_prefix_changes_and_truncation_are_rejected() -> None:
     assert "history_truncated" in {item["code"] for item in exc_info.value.errors}
 
 
+def test_text_only_trace_is_not_a_trainable_generation() -> None:
+    trace = _trace(_event(0, [10, 11], [], None))
+    with pytest.raises(TrajectoryContractError) as exc_info:
+        compile_single_context_trace(trace)
+    assert "no_generated_tokens" in {item["code"] for item in exc_info.value.errors}
+
+
 def test_event_identity_order_and_policy_are_strict() -> None:
     with pytest.raises(TrajectoryContractError):
         _trace(_event(1, [1], [2], [-0.2]))
@@ -203,6 +210,28 @@ def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
     unhashable_rollout_id = copy.deepcopy(records)
     unhashable_rollout_id[0]["rollout_id"] = ["bad"]
     assert "missing_rollout_id" in {item["code"] for item in check_training_export(unhashable_rollout_id)["reasons"]}
+
+
+def test_export_rejects_infrastructure_error_even_with_complete_group() -> None:
+    records = []
+    for index in range(2):
+        records.append(
+            compile_single_context_trace(
+                _trace(
+                    _event(0, [1], [2 + index], [-0.2 - index], policy="policy-v1"),
+                    source="captured",
+                    group="group-infra",
+                    rollout=f"rollout-infra-{index}",
+                    outcome={"status": "failed"},
+                    expected=2,
+                    capture_evidence="engine_raw",
+                )
+            )
+        )
+    records[0]["error_category"] = "INFRA_ERROR"
+    decision = check_training_export(records)
+    assert decision["eligible"] is False
+    assert any(item["code"] == "infra_error_not_trainable" for item in decision["reasons"])
 
 
 def test_cli_can_inspect_synthetic_but_does_not_export_it(tmp_path: Path) -> None:
