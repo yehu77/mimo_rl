@@ -27,6 +27,26 @@ SAMPLING = {
     "repetition_penalty": 1.0,
     "probability_mode": "full_vocab",
 }
+PASS_OUTCOME = {
+    "schema_version": 1,
+    "status": "PASS",
+    "raw_reward": 1.0,
+    "reward": 1.0,
+    "raw_error_category": None,
+    "verifier_returncode": 0,
+    "resolved": True,
+    "completion_evidence": "official_verifier_returncode",
+}
+TEST_FAIL_OUTCOME = {
+    "schema_version": 1,
+    "status": "TEST_FAIL",
+    "raw_reward": 0.0,
+    "reward": 0.0,
+    "raw_error_category": None,
+    "verifier_returncode": 1,
+    "resolved": False,
+    "completion_evidence": "official_verifier_returncode",
+}
 
 
 def _event(step: int, input_ids: list[int], output_ids: list[int], probs: list[float] | None, *, policy: str = "synthetic-policy-v1", event_id: str | None = None) -> GenerationEvent:
@@ -42,14 +62,14 @@ def _event(step: int, input_ids: list[int], output_ids: list[int], probs: list[f
     )
 
 
-def _trace(*events: GenerationEvent, source: str = "synthetic", group: str = "group-0", rollout: str = "rollout-0", outcome: dict | None = None, expected: int | None = None, capture_evidence: str | None = None) -> Trajectory:
+def _trace(*events: GenerationEvent, source: str = "synthetic", group: str = "group-0", rollout: str = "rollout-0", context: str = "context-0", outcome: dict | None = None, expected: int | None = None, capture_evidence: str | None = None) -> Trajectory:
     return Trajectory(
         schema_version=1,
         source_kind=source,
         task_id="task-0",
         group_id=group,
         rollout_id=rollout,
-        context_id="context-0",
+        context_id=context,
         policy_name="synthetic-policy-v1" if source == "synthetic" else "policy-9b",
         policy_version="synthetic-policy-v1" if source == "synthetic" else "policy-v1",
         tokenizer_fingerprint="tok-fp",
@@ -163,7 +183,7 @@ def test_export_rejects_synthetic_and_accepts_only_complete_consistent_captured_
             source="captured",
             group="group-real",
             rollout=f"rollout-{index}",
-            outcome={"status": "success"},
+            outcome=PASS_OUTCOME,
             expected=2,
             capture_evidence="engine_raw",
         )
@@ -178,6 +198,46 @@ def test_export_rejects_synthetic_and_accepts_only_complete_consistent_captured_
     assert any(item["code"] == "group_identity_conflict" for item in check_training_export(bad)["reasons"])
 
 
+def test_empty_export_is_rejected_and_completed_test_fail_is_legal() -> None:
+    empty = check_training_export([])
+    assert empty["eligible"] is False
+    assert empty["reasons"][0]["code"] == "empty_training_export"
+    record = compile_single_context_trace(
+        _trace(
+            _event(0, [1], [2], [-0.2], policy="policy-v1"),
+            source="captured",
+            outcome=TEST_FAIL_OUTCOME,
+            expected=1,
+            capture_evidence="engine_raw",
+        )
+    )
+    assert check_training_export([record])["eligible"] is True
+
+
+def test_direct_export_rechecks_sampling_and_allows_independent_contexts() -> None:
+    records = []
+    for index in range(2):
+        records.append(
+            compile_single_context_trace(
+                _trace(
+                    _event(0, [1], [2 + index], [-0.2], policy="policy-v1"),
+                    source="captured",
+                    group="group-independent",
+                    rollout=f"rollout-independent-{index}",
+                    context=f"context-independent-{index}",
+                    outcome=PASS_OUTCOME,
+                    expected=2,
+                    capture_evidence="engine_raw",
+                )
+            )
+        )
+    assert check_training_export(records)["eligible"] is True
+    altered = copy.deepcopy(records)
+    altered[0]["sampling_config"]["temperature"] = 0.7
+    reasons = check_training_export(altered)["reasons"]
+    assert any(item["code"] == "unsupported_sampling_config" for item in reasons)
+
+
 def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
     records = []
     for index in range(2):
@@ -188,7 +248,7 @@ def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
                     source="captured",
                     group="group-contract",
                     rollout=f"rollout-contract-{index}",
-                    outcome={"status": "success"},
+            outcome=PASS_OUTCOME,
                     expected=2,
                     capture_evidence="engine_raw",
                 )
@@ -205,7 +265,11 @@ def test_export_rechecks_arrays_types_and_single_context_identity() -> None:
 
     mixed_context = copy.deepcopy(records)
     mixed_context[1]["context_id"] = "other-context"
-    assert "group_identity_conflict" in {item["code"] for item in check_training_export(mixed_context)["reasons"]}
+    assert check_training_export(mixed_context)["eligible"] is True
+
+    mixed_task = copy.deepcopy(records)
+    mixed_task[1]["task_id"] = "other-task"
+    assert "group_identity_conflict" in {item["code"] for item in check_training_export(mixed_task)["reasons"]}
 
     unhashable_rollout_id = copy.deepcopy(records)
     unhashable_rollout_id[0]["rollout_id"] = ["bad"]
@@ -263,3 +327,20 @@ def test_cli_rejects_missing_generation_probability_without_zero_fill(tmp_path: 
     payload = json.loads(result.stdout)
     assert payload["status"] == "NOT_TRAINABLE"
     assert any(item["code"] == "missing_generation_log_probs" for item in payload["errors"])
+
+
+@pytest.mark.parametrize("content", ["[]\n", "\n"])
+def test_cli_rejects_empty_json_and_jsonl_exports(tmp_path: Path, content: str) -> None:
+    trace_path = tmp_path / "empty.jsonl"
+    trace_path.write_text(content, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "inspect_trajectory.py"), "--input", str(trace_path), "--export-training"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "EXPORT_REJECTED"
+    assert "empty_training_export" in payload["export_decision"]["reason_codes"]

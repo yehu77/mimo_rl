@@ -6,7 +6,15 @@
 
 历史说明（截至本文初始提交）：准备本文的 ChatGPT 尚未读取 `yehu77/mimo_rl` 的文件、分支或 commit，GitHub 写入连接也尚未建立。B001 已完成真实仓库检查、实现、数据检查并推送；不要把这段历史状态当作当前状态。Notion 记录的 0/36 是此前验收快照，不是对当前工作区的检查结论。
 
-## 当前批次：B003（GitHub Issue #6）
+## 当前批次：B004（GitHub Issue #8）
+
+评审基线：`c98f1e895043fe6a156ec9c2855130bd510a8dba`，工作分支：`codex/b004-runtime-bridge`，目标 PR base：`codex/b003-trajectory-contract`。
+
+Issue #8 授权本批次：先单独修复训练出口的空输入、VerifierOutcome、官方基础设施错误、直接出口重校验、采样白名单和独立 rollout context 规则；然后实现固定 mimoagent reward 结果适配、标准库 runtime preflight、Docker-only 官方环境薄适配和默认 PLAN_ONLY 的单任务无模型 smoke。缺少 Python 3.12、mimoagent、Docker、镜像或用户确认时只报告 BLOCKED/NOT_RUN；不安装依赖、不启动服务、不拉镜像、不加载模型、不生成真实 rollout、不训练。完成代码与只读预检后停止，不进入 B005。
+
+下方 B003 段落保留为历史记录；本段取代其“当前批次”约束。
+
+## 历史批次：B003（GitHub Issue #6）
 
 评审基线：`5d0f9339c4728092c4c376948d2e1223ebb7eaa8`，工作分支：`codex/b003-trajectory-contract`，目标 PR base：`codex/b002-task-contract`。
 

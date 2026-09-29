@@ -14,9 +14,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .reward import RewardContractError, validate_verifier_outcome
+
 
 TRAJECTORY_SCHEMA_VERSION = 1
 _SOURCE_KINDS = ("synthetic", "captured")
+_SAMPLING_FIELDS = {"temperature", "top_p", "top_k", "repetition_penalty", "probability_mode", "presence_penalty", "frequency_penalty", "logit_bias", "seed"}
 
 
 def _clone(value: Any) -> Any:
@@ -181,10 +184,16 @@ def _sampling_config(value: Any) -> Dict[str, Any]:
     if not isinstance(value, Mapping):
         raise TrajectoryContractError([_error("invalid_sampling_config", "sampling_config must be an object")])
     config = dict(value)
+    unknown = sorted(set(config) - _SAMPLING_FIELDS)
+    if unknown:
+        raise TrajectoryContractError([_error("unsupported_sampling_config", "sampling_config contains unsupported fields", fields=unknown)])
     temperature = config.get("temperature")
     top_p = config.get("top_p")
     top_k = config.get("top_k", 0)
     repetition_penalty = config.get("repetition_penalty", 1.0)
+    presence_penalty = config.get("presence_penalty", 0.0)
+    frequency_penalty = config.get("frequency_penalty", 0.0)
+    logit_bias = config.get("logit_bias", {})
     if isinstance(temperature, bool) or not isinstance(temperature, (int, float)) or float(temperature) != 1.0:
         raise TrajectoryContractError([_error("unsupported_sampling_config", "B003 requires temperature=1.0")])
     if isinstance(top_p, bool) or not isinstance(top_p, (int, float)) or float(top_p) != 1.0:
@@ -193,6 +202,11 @@ def _sampling_config(value: Any) -> Dict[str, Any]:
         raise TrajectoryContractError([_error("unsupported_sampling_config", "B003 requires full-vocabulary top_k=0")])
     if isinstance(repetition_penalty, bool) or not isinstance(repetition_penalty, (int, float)) or float(repetition_penalty) != 1.0:
         raise TrajectoryContractError([_error("unsupported_sampling_config", "B003 requires repetition_penalty=1.0")])
+    for field, value in (("presence_penalty", presence_penalty), ("frequency_penalty", frequency_penalty)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or float(value) != 0.0:
+            raise TrajectoryContractError([_error("unsupported_sampling_config", f"B004 requires {field}=0")])
+    if logit_bias not in ({}, None):
+        raise TrajectoryContractError([_error("unsupported_sampling_config", "B004 does not support non-empty logit_bias")])
     if config.get("probability_mode") != "full_vocab":
         raise TrajectoryContractError([_error("unsupported_sampling_config", "probability_mode must be full_vocab")])
     return _clone(config)
@@ -390,6 +404,8 @@ def _check_compiled_record_shape(record: Mapping[str, Any], record_index: int, r
     if not isinstance(tokens, list):
         reasons.append(_error("invalid_tokens", "training record tokens must be a list", record_index=record_index))
     else:
+        if not tokens:
+            reasons.append(_error("empty_input", "training record tokens must not be empty", record_index=record_index))
         for position, token in enumerate(tokens):
             if isinstance(token, bool) or not isinstance(token, int) or token < 0:
                 reasons.append(_error("invalid_token_id", "training record token must be a non-negative integer", record_index=record_index, position=position))
@@ -405,8 +421,12 @@ def _check_compiled_record_shape(record: Mapping[str, Any], record_index: int, r
     valid_response = isinstance(response_length, int) and not isinstance(response_length, bool) and response_length >= 0
     if not valid_prompt:
         reasons.append(_error("invalid_prompt_length", "prompt_length must be a non-negative integer", record_index=record_index))
+    elif prompt_length == 0:
+        reasons.append(_error("empty_input", "prompt_length must be positive for training export", record_index=record_index))
     if not valid_response:
         reasons.append(_error("invalid_response_length", "response_length must be a non-negative integer", record_index=record_index))
+    elif response_length == 0:
+        reasons.append(_error("empty_input", "response_length must be positive for training export", record_index=record_index))
     if isinstance(loss_mask, list) and valid_response and len(loss_mask) != response_length:
         reasons.append(_error("loss_mask_length_mismatch", "loss_mask must equal response_length", record_index=record_index, expected=response_length, actual=len(loss_mask)))
     if isinstance(probabilities, list) and valid_response and len(probabilities) != response_length:
@@ -431,6 +451,18 @@ def _check_compiled_record_shape(record: Mapping[str, Any], record_index: int, r
                 reasons.append(_error("generated_count_mismatch", "generated_token_count must equal sum(loss_mask)", record_index=record_index, expected=generated, actual=generated_count))
         else:
             reasons.append(_error("invalid_generated_count", "generated_token_count must be a non-negative integer", record_index=record_index))
+        if generated == 0:
+            reasons.append(_error("no_generated_tokens", "training record must contain model-generated tokens", record_index=record_index))
+
+
+def _check_record_outcome(record: Mapping[str, Any], record_index: int, reasons: List[Dict[str, Any]]) -> None:
+    try:
+        outcome = validate_verifier_outcome(record.get("outcome"))
+    except RewardContractError as exc:
+        reasons.extend(_error(item.get("code", "invalid_outcome"), item.get("detail", "invalid outcome"), record_index=record_index, **{key: value for key, value in item.items() if key not in {"code", "detail"}}) for item in exc.errors)
+        return
+    if outcome.status not in {"PASS", "TEST_FAIL"}:
+        reasons.append(_error("outcome_not_trainable", "only completed PASS or TEST_FAIL outcomes may enter training export", record_index=record_index, status=outcome.status))
 
 
 def check_training_export(records: Sequence[Mapping[str, Any]], expected_group_size: Optional[int] = None) -> Dict[str, Any]:
@@ -438,6 +470,8 @@ def check_training_export(records: Sequence[Mapping[str, Any]], expected_group_s
     reasons: List[Dict[str, Any]] = []
     groups: Dict[str, List[Mapping[str, Any]]] = defaultdict(list)
     rollout_ids = set()
+    if not isinstance(records, Sequence) or isinstance(records, (str, bytes)) or not records:
+        return {"eligible": False, "reasons": [_error("empty_training_export", "training export requires at least one record")], "parameter_update": False}
     for index, record in enumerate(records):
         if not isinstance(record, Mapping):
             reasons.append(_error("invalid_training_record", "training record must be an object", record_index=index))
@@ -447,7 +481,14 @@ def check_training_export(records: Sequence[Mapping[str, Any]], expected_group_s
             reasons.append(_error("missing_group_id", "training record has no group_id", record_index=index))
         else:
             groups[group_id].append(record)
+        if record.get("schema_version") != TRAJECTORY_SCHEMA_VERSION:
+            reasons.append(_error("unsupported_schema_version", "training record schema_version is unsupported", record_index=index))
+        try:
+            _sampling_config(record.get("sampling_config"))
+        except TrajectoryContractError as exc:
+            reasons.extend(_error(item.get("code", "invalid_sampling_config"), item.get("detail", "invalid sampling config"), record_index=index, **{key: value for key, value in item.items() if key not in {"code", "detail"}}) for item in exc.errors)
         _check_compiled_record_shape(record, index, reasons)
+        _check_record_outcome(record, index, reasons)
         if record.get("source_kind") != "captured":
             reasons.append(_error("synthetic_not_trainable", "synthetic or unknown source cannot be exported for training", record_index=index))
         if record.get("capture_evidence") != "engine_raw":
@@ -463,8 +504,6 @@ def check_training_export(records: Sequence[Mapping[str, Any]], expected_group_s
             reasons.append(_error("duplicate_rollout_id", "rollout_id must be unique", record_index=index))
         elif isinstance(rollout_id, str) and rollout_id:
             rollout_ids.add(rollout_id)
-        if record.get("outcome") is None:
-            reasons.append(_error("incomplete_outcome", "training record has no recorded verifier outcome", record_index=index))
         if record.get("error_category") == "INFRA_ERROR":
             reasons.append(_error("infra_error_not_trainable", "INFRA_ERROR cannot be exported as a normal sample", record_index=index))
     for group_id, group in groups.items():
@@ -477,7 +516,7 @@ def check_training_export(records: Sequence[Mapping[str, Any]], expected_group_s
             reasons.append(_error("missing_expected_group_size", "group requires an expected_group_size", group_id=group_id))
         elif len(group) != expected:
             reasons.append(_error("incomplete_group", "group does not contain expected rollout count", group_id=group_id, expected=expected, actual=len(group)))
-        identity_fields = ("task_id", "context_id", "policy_name", "policy_version", "tokenizer_fingerprint", "template_fingerprint", "harness_fingerprint")
+        identity_fields = ("task_id", "policy_name", "policy_version", "tokenizer_fingerprint", "template_fingerprint", "harness_fingerprint")
         for field in identity_fields:
             values = [record.get(field) for record in group]
             if any(not isinstance(value, str) or not value for value in values):

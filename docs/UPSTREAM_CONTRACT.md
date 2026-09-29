@@ -186,3 +186,49 @@ policy 版本；`compile_single_context_trace` 只接受单 context 的 append-o
 engine capture、真实 rollout 或参数更新的 runtime 通过证据；带
 `capture_evidence=engine_raw` 的单元 fixture 只验证拒绝规则的形状，不能冒充
 官方运行结果。
+
+## B004 reward 结果适配（source_read）
+
+B004 使用固定 commit `467f0a19016f0ac4d63b8d17a1f0da9ba07f232c` 的规范仓库
+[`XiaomiMiMo/mimoagent`](https://github.com/XiaomiMiMo/mimoagent/tree/467f0a19016f0ac4d63b8d17a1f0da9ba07f232c)，
+不是另写 verifier：
+
+| 官方源码 | 观察到的结果 | 本项目适配 |
+|---|---|---|
+| `src/mimoagent/environments/datasets/opensource_code.py` `_do_calculate_reward` | 返回 `(reward, test_output, extra)`；正常执行的 `extra` 有 `verifier_returncode`、`resolved`、`test_duration` | `rc=0 + resolved=true + reward=1.0` → `PASS`；`rc!=0 + resolved=false + reward=0.0` → `TEST_FAIL` |
+| 同文件 reset/apply 失败分支 | `error_category=reward/testbed_corrupted`，reward 仍为 0.0 | `INFRA_ERROR`，保留 `raw_error_category`，不可训练 |
+| `src/mimoagent/environments/datasets/base.py` `REWARD_TESTBED_CORRUPTED` / `calculate_reward` | `TransportError` 返回 `transport_error=true`；一般异常可能只有 `model_patch`，没有 verifier returncode | transport 或官方基础设施类别 → `INFRA_ERROR`；缺 verifier 事实 → `UNKNOWN`，不把 0.0 猜成模型失败 |
+| 固定 runner 的 `agent_status=InfraError` | 不进入可训练 verifier 结果 | `INFRA_ERROR`，保留基础设施证据 |
+
+`src/mimo_rl/reward.py` 的 `VerifierOutcome` 是本项目自己的适配 schema，保留
+`raw_reward`、规范化 `status`、可训练 `reward`、`raw_error_category`、
+`verifier_returncode`、`resolved` 和 `completion_evidence`。它只验证已有数据，
+不调用 `calculate_reward`、不执行 `test_command`，也不将所有 reward=0 解释为
+TEST_FAIL。源码读取和 synthetic 结果适配测试不等于官方环境 import 或 runtime
+通过；后者继续在 B004 报告中分开记录。
+
+## B004 官方环境薄适配（source_read）
+
+固定 `mimoagent` 的 [`make_dataset_env`](https://github.com/XiaomiMiMo/mimoagent/blob/467f0a19016f0ac4d63b8d17a1f0da9ba07f232c/src/mimoagent/environments/utils.py#L43-L126)
+先解析任务 dataset/image，再构造指定的 `environment_class`，最后返回
+`DatasetEnvironment`；[`OpenSourceCodeEnvironment.setup_environment`](https://github.com/XiaomiMiMo/mimoagent/blob/467f0a19016f0ac4d63b8d17a1f0da9ba07f232c/src/mimoagent/environments/datasets/opensource_code.py#L126-L181)
+负责官方 setup，公开的 [`calculate_reward`](https://github.com/XiaomiMiMo/mimoagent/blob/467f0a19016f0ac4d63b8d17a1f0da9ba07f232c/src/mimoagent/environments/datasets/base.py#L337-L381)
+负责 reward 三元组。固定 Docker 环境的 [`DockerEnvironmentConfig`](https://github.com/XiaomiMiMo/mimoagent/blob/467f0a19016f0ac4d63b8d17a1f0da9ba07f232c/src/mimoagent/environments/docker.py#L13-L31)
+和 `DockerEnvironment.start/execute/cleanup` 使用 `run_args`、容器 `exec` 和
+本次 container id；本项目不复制这些实现。
+
+`src/mimo_rl/mimo_runtime.py` 重新跑严格 manifest、Parquet 和 image mapping，
+再构造 `TaskBundle`，而不是信任旧 catalog。`build_execution_plan` 默认只输出
+任务 ID、精确映射镜像、cwd、命令/patch 长度和 hash、Docker 隔离参数与
+`PENDING_RUNTIME`；不输出题面、patch、命令正文、private bundle 路径或凭据。
+显式执行路径才懒加载官方 `make_dataset_env(environment_class="docker",\
+reward_mode="programmatic")`，执行顺序是 setup → 初始状态公开
+`calculate_reward` → `normalize_mimoagent_reward` → cleanup；任务命令只能由
+官方 Docker `execute` 送入容器，适配器没有宿主机 fallback。`smoke_official_code.py`
+默认 `PLAN_ONLY`；`--execute` 还需显式 runtime 确认，当前没有调用它。
+
+`preflight_runtime.py` 是标准库只读检查：受控子进程检查显式解释器版本和
+`mimoagent`/slime/Uni-Agent/verl 的实际 import location/version，Docker 只调用
+`docker info`；它不安装包、不启动 daemon、不拉镜像、不创建容器。固定源码
+revision 是 source-read 记录，只有运行时安装包能提供可追溯版本且 Docker 权限
+满足时才会显示 `READY`。
