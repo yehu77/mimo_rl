@@ -6,13 +6,13 @@
 
 历史说明（截至本文初始提交）：准备本文的 ChatGPT 尚未读取 `yehu77/mimo_rl` 的文件、分支或 commit，GitHub 写入连接也尚未建立。B001 已完成真实仓库检查、实现、数据检查并推送；不要把这段历史状态当作当前状态。Notion 记录的 0/36 是此前验收快照，不是对当前工作区的检查结论。
 
-## 当前批次：B002（GitHub Issue #4）
+## 当前批次：B003（GitHub Issue #6）
 
-评审基线：`ba30dbf422c81139653f00bd0f05f76da1f88955`，工作分支：`codex/b002-task-contract`，目标 PR base：`codex/b001-r1`。
+评审基线：`5d0f9339c4728092c4c376948d2e1223ebb7eaa8`，工作分支：`codex/b003-trajectory-contract`，目标 PR base：`codex/b002-task-contract`。
 
-Issue #4 授权本批次推进：先修复 unmatched image 详情绑定，再只读固定官方 recipe、mimoagent/uni-agent 子模块和 slime 源码，建立 `docs/UPSTREAM_CONTRACT.md`，实现轻量 TaskBundle、solver/verifier 隔离和 `prepare_code_tasks.py`，复用严格 provenance 检查完成固定真实数据合同检查。保留 R1 回归；本轮不启动 Docker、模型、任务容器、官方 loader runtime、agent loop 或训练。B001 原始结果和 R1 记录保留在 `reports/handoffs/B001.md`。
+Issue #6 授权本批次推进：先单独完成 B003.0 的消息白名单、反序列化同等校验、solver/runtime 一致性、PENDING 状态和唯一任务文本选择；门槛通过后再实现同步单上下文原始轨迹、append-only 编译、离线检查和未来训练导出拒绝条件。保留 B001/B002 历史、固定 dataset/upstream SHA；本轮不启动 Docker、模型、任务容器、官方 loader runtime、agent loop、verifier、rollout 或训练。
 
-本段取代旧的 B001-R1 当前批次限制；旧批次段落仍作为历史交接保留，不再约束本批次。
+本段取代旧的 B002 当前批次限制；旧批次段落仍作为历史交接保留，不再约束本批次。B003.0 未通过时停止，不用后续轨迹功能掩盖问题。
 
 ## 1. 给 Codex 的项目背景
 
