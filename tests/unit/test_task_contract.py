@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from mimo_rl.inspection import DATASET
-from mimo_rl.task import MappingEntry, TaskBundle, TaskContractError, load_image_mapping
+from mimo_rl.task import MappingEntry, RuntimeSpec, TaskBundle, TaskContractError, load_image_mapping
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,12 +61,19 @@ def test_string_and_object_instance_json_are_equivalent_and_prompt_is_unchanged(
     object_row["extra_info"]["instance_json"] = instance
     object_bundle = TaskBundle.from_record(object_row, source_row_index=2, data_revision=REVISION, mapping=_mapping())
     assert string_bundle.to_solver_payload() == object_bundle.to_solver_payload()
-    assert string_bundle.to_solver_payload()["messages"] == [{"role": "user", "content": "Solve the task"}]
+    assert string_bundle.to_solver_payload()["selected_task_text"] == "Solve the task"
+    assert string_bundle.solver.messages == ({"role": "user", "content": "Solve the task"},)
     assert string_bundle.to_mimoagent_instance()["test_patch"] == instance["test_patch"]
 
 
 def test_solver_allowlist_excludes_private_nested_fields_and_repr_redacts_patch() -> None:
     sentinel = "PRIVATE_TEST_SENTINEL"
+    row = _row(_instance(patch=sentinel, private_field={"nested": sentinel}), private_extra={"nested": sentinel})
+    row["prompt"][0]["metadata"] = {"test_patch": sentinel}
+    with pytest.raises(TaskContractError) as exc_info:
+        TaskBundle.from_record(row, source_row_index=0, data_revision=REVISION, mapping=_mapping())
+    assert "unsupported_prompt_fields" in {item["code"] for item in exc_info.value.errors}
+
     bundle = TaskBundle.from_record(
         _row(_instance(patch=sentinel, private_field={"nested": sentinel}), private_extra={"nested": sentinel}),
         source_row_index=0,
@@ -75,7 +82,7 @@ def test_solver_allowlist_excludes_private_nested_fields_and_repr_redacts_patch(
     )
     serialized = json.dumps(bundle.to_solver_payload(), ensure_ascii=False)
     assert sentinel not in serialized
-    assert set(bundle.to_solver_payload()) == {"task_id", "messages", "problem_statement", "cwd"}
+    assert set(bundle.to_solver_payload()) == {"task_id", "selected_task_text", "task_text_source", "cwd"}
     assert sentinel not in repr(bundle)
     assert sentinel in bundle.to_mimoagent_instance()["test_patch"]
 
@@ -96,12 +103,12 @@ def test_core_contract_errors_are_specific(updates: dict, code: str) -> None:
     assert code in {item["code"] for item in exc_info.value.errors}
 
 
-def test_unmapped_image_and_duplicate_mapping_are_blocking() -> None:
+def test_unmapped_image_and_duplicate_mapping_are_blocking(tmp_path: Path) -> None:
     with pytest.raises(TaskContractError) as exc_info:
         TaskBundle.from_record(_row(_instance(docker_image="unknown:latest")), source_row_index=0, data_revision=REVISION, mapping=_mapping())
     assert {item["code"] for item in exc_info.value.errors} == {"unmapped_docker_image"}
 
-    mapping_path = Path("/tmp") / "mimo-b002-duplicate-mapping.jsonl"
+    mapping_path = tmp_path / "duplicate-mapping.jsonl"
     mapping_path.write_text(
         '{"dataset_image":"x","dockerhub_image":"one"}\n{"dataset_image":"x","dockerhub_image":"two"}\n',
         encoding="utf-8",
@@ -136,6 +143,105 @@ def test_serialization_round_trip_and_input_immutability() -> None:
     assert row == before
     assert restored.to_mimoagent_instance() == bundle.to_mimoagent_instance()
     assert restored.runtime.source_extra_info_index == 17
+
+
+def test_from_dict_rejects_reviewer_counterexamples() -> None:
+    bundle = TaskBundle.from_record(_row(), source_row_index=7, data_revision=REVISION, mapping=_mapping())
+    payload = json.loads(bundle.to_json(include_private=True))
+
+    malformed = copy.deepcopy(payload)
+    malformed["verifier"]["test_patch"] = None
+    with pytest.raises(TaskContractError):
+        TaskBundle.from_dict(malformed)
+
+    malformed = copy.deepcopy(payload)
+    malformed["verifier"]["verifier_timeout_sec"] = -1
+    with pytest.raises(TaskContractError):
+        TaskBundle.from_dict(malformed)
+
+    malformed = copy.deepcopy(payload)
+    malformed["runtime"]["cwd"] = "/different"
+    with pytest.raises(TaskContractError) as exc_info:
+        TaskBundle.from_dict(malformed)
+    assert "cwd_conflict" in {item["code"] for item in exc_info.value.errors}
+
+    malformed = copy.deepcopy(payload)
+    malformed["runtime"]["pending_runtime"] = []
+    with pytest.raises(TaskContractError):
+        TaskBundle.from_dict(malformed)
+
+    malformed = copy.deepcopy(payload)
+    malformed["task_id"] = "other"
+    with pytest.raises(TaskContractError):
+        TaskBundle.from_dict(malformed)
+
+    malformed = copy.deepcopy(payload)
+    malformed["mimoagent_instance"]["cwd"] = "/different"
+    with pytest.raises(TaskContractError) as exc_info:
+        TaskBundle.from_dict(malformed)
+    assert "controller_instance_conflict" in {item["code"] for item in exc_info.value.errors}
+
+
+@pytest.mark.parametrize("value", [123, ""])
+def test_from_record_rejects_unverified_runtime_declarations(value: object) -> None:
+    with pytest.raises(TaskContractError) as exc_info:
+        TaskBundle.from_record(_row(_instance(repo_identity=value)), source_row_index=0, data_revision=REVISION, mapping=_mapping())
+    assert "invalid_runtime_declaration" in {item["code"] for item in exc_info.value.errors}
+
+
+def test_runtime_pending_state_is_immutable_and_complete() -> None:
+    with pytest.raises(TaskContractError) as exc_info:
+        RuntimeSpec(
+            dataset_image="dataset-image:latest",
+            dockerhub_image="docker.io/example/task:1",
+            cwd="/testbed",
+            data_revision=REVISION,
+            source_row_index=0,
+            source_extra_info_index=17,
+            mapping_line_indices=(3,),
+            repo_identity=None,
+            base_ref=None,
+            image_digest=None,
+            pending_runtime=["repo_identity", "base_ref", "image_digest"],  # type: ignore[arg-type]
+        )
+    assert "invalid_pending_runtime" in {item["code"] for item in exc_info.value.errors}
+
+
+def test_direct_solver_construction_revalidates_messages_and_defensively_exports() -> None:
+    solver = __import__("mimo_rl.task", fromlist=["SolverTask"]).SolverTask(
+        task_id="task-0",
+        messages=({"role": "user", "content": "Keep this text"},),
+        problem_statement="Fallback",
+        cwd="/testbed",
+    )
+    exported = solver.to_solver_payload()
+    exported["selected_task_text"] = "changed"
+    assert solver.selected_task_text == "Keep this text"
+    solver.messages[0]["metadata"] = {"test_patch": "PRIVATE_TEST_SENTINEL"}
+    with pytest.raises(TaskContractError):
+        solver.to_solver_payload()
+
+
+@pytest.mark.parametrize(
+    "prompt,problem,raw,expected,source",
+    [
+        ([{"role": "user", "content": "user text"}], "problem text", None, "user text", "prompt_user"),
+        ([{"role": "system", "content": "system"}, {"role": "user", "content": ""}], "problem text", None, "problem text", "problem_statement"),
+        ([{"role": "user", "content": "user text"}], "problem text", "raw text", "raw text", "raw_prompt"),
+    ],
+)
+def test_unique_task_text_selection(prompt: list[dict], problem: str, raw: str | None, expected: str, source: str) -> None:
+    from mimo_rl.task import select_task_text
+
+    assert select_task_text(prompt, problem, raw) == (expected, source)
+
+
+def test_task_text_selection_rejects_unsupported_message_fields() -> None:
+    from mimo_rl.task import select_task_text
+
+    with pytest.raises(TaskContractError) as exc_info:
+        select_task_text([{"role": "user", "content": "text", "metadata": {"private": True}}], "fallback")
+    assert "unsupported_prompt_fields" in {item["code"] for item in exc_info.value.errors}
 
 
 def _write_parquet_case(tmp_path: Path, rows: list[dict]) -> tuple[Path, Path, Path]:
