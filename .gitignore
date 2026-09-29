@@ -30,3 +30,4 @@ checkpoints/
 build/
 dist/
 *.egg-info/
+artifacts/data/sample_records.json

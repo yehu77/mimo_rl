@@ -1,0 +1,122 @@
+[
+  {
+    "fields": {
+      "ability": {
+        "length": 3,
+        "sha256": "645c0bdce39226ea2274aa6ee0f4a9d368473f8e00d86afb3a759b57de9dc9ff",
+        "type": "string"
+      },
+      "agent_name": {
+        "length": 14,
+        "sha256": "f0a70e829af13760ecf164b755351357c3dc6d4df172ffb7fa3a9c5a68e03089",
+        "type": "string"
+      },
+      "data_source": {
+        "length": 15,
+        "sha256": "7a2bf51ce8f2f715e8f250d293f4efd75e6a409247a66aaae1f573fd5c96745a",
+        "type": "string"
+      },
+      "extra_info": {
+        "keys": [
+          "dataset_type",
+          "index",
+          "instance_id",
+          "instance_json"
+        ],
+        "type": "object"
+      },
+      "prompt": {
+        "length": 1,
+        "type": "list"
+      },
+      "reward_model": {
+        "keys": [
+          "ground_truth",
+          "style"
+        ],
+        "type": "object"
+      }
+    },
+    "record_index": 0
+  },
+  {
+    "fields": {
+      "ability": {
+        "length": 3,
+        "sha256": "645c0bdce39226ea2274aa6ee0f4a9d368473f8e00d86afb3a759b57de9dc9ff",
+        "type": "string"
+      },
+      "agent_name": {
+        "length": 14,
+        "sha256": "f0a70e829af13760ecf164b755351357c3dc6d4df172ffb7fa3a9c5a68e03089",
+        "type": "string"
+      },
+      "data_source": {
+        "length": 15,
+        "sha256": "7a2bf51ce8f2f715e8f250d293f4efd75e6a409247a66aaae1f573fd5c96745a",
+        "type": "string"
+      },
+      "extra_info": {
+        "keys": [
+          "dataset_type",
+          "index",
+          "instance_id",
+          "instance_json"
+        ],
+        "type": "object"
+      },
+      "prompt": {
+        "length": 1,
+        "type": "list"
+      },
+      "reward_model": {
+        "keys": [
+          "ground_truth",
+          "style"
+        ],
+        "type": "object"
+      }
+    },
+    "record_index": 1
+  },
+  {
+    "fields": {
+      "ability": {
+        "length": 3,
+        "sha256": "645c0bdce39226ea2274aa6ee0f4a9d368473f8e00d86afb3a759b57de9dc9ff",
+        "type": "string"
+      },
+      "agent_name": {
+        "length": 14,
+        "sha256": "f0a70e829af13760ecf164b755351357c3dc6d4df172ffb7fa3a9c5a68e03089",
+        "type": "string"
+      },
+      "data_source": {
+        "length": 15,
+        "sha256": "7a2bf51ce8f2f715e8f250d293f4efd75e6a409247a66aaae1f573fd5c96745a",
+        "type": "string"
+      },
+      "extra_info": {
+        "keys": [
+          "dataset_type",
+          "index",
+          "instance_id",
+          "instance_json"
+        ],
+        "type": "object"
+      },
+      "prompt": {
+        "length": 1,
+        "type": "list"
+      },
+      "reward_model": {
+        "keys": [
+          "ground_truth",
+          "style"
+        ],
+        "type": "object"
+      }
+    },
+    "record_index": 2
+  }
+]

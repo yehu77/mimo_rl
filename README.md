@@ -2,14 +2,16 @@
 
 `mimo_rl` is the portable data and validation bootstrap for a MiMo code-agent RL project. B001 establishes a reproducible Mac development environment, reads a fixed revision of the official code dataset, and records its actual schema. It does not implement rollout, verifier execution, slime/SGLang integration, optimizer updates, checkpoints, GAR, length penalties, or multi-harness training.
 
+B001-R1 hardens the same data-only boundary after review: fatal findings share one status function between the report and CLI, every anomaly keeps source row or mapping line indices, and official-source checks bind both input files to a verified download manifest.
+
 ## B001 status
 
 - Base source: `chatgpt/b001-handoff` at `cac2725629af889bc48c9348c88d98c1aa2481f6`.
-- Implementation branch: `codex/b001-mac-bootstrap`.
+- Implementation branch: `codex/b001-mac-bootstrap`; R1 is developed from `898b5f8` on `codex/b001-r1`.
 - Dataset: `XiaomiMiMo/MiMo-V2.6-RL-oss` revision `639865fd3374018d6cb29b9fb82dd531406fcf5f`.
 - The inspected `code.parquet` has 2,698 rows and columns `data_source`, `ability`, `agent_name`, `prompt`, `reward_model`, and `extra_info`. `prompt` is a list of `{content, role}` structs; `reward_model` and `extra_info` are structs; `extra_info.instance_json` is a JSON string. The real-data check found no parse errors, empty prompts, duplicate IDs, or unmatched image mappings.
 
-The source revision, file sizes, SHA-256 values, schema, samples, and validation counts are in [`artifacts/data`](artifacts/data). Raw data is deliberately ignored by Git and can be recreated with the command below.
+The source revision, file sizes, SHA-256 values, schema, sample summaries, and validation counts are in [`artifacts/data`](artifacts/data). Raw data and complete samples are deliberately ignored by Git and can be recreated locally with explicit flags.
 
 ## Rebuild on a Mac
 
@@ -38,10 +40,19 @@ The downloader accepts an immutable 40-character dataset commit and fetches exac
   --parquet artifacts/data/raw/code.parquet \
   --mapping artifacts/data/raw/image-mapping.jsonl \
   --output-dir artifacts/data \
-  --revision 639865fd3374018d6cb29b9fb82dd531406fcf5f
+  --revision 639865fd3374018d6cb29b9fb82dd531406fcf5f \
+  --strict-provenance
+
+# Optional local-only complete samples; sample_records.json is ignored by Git.
+.venv/bin/python scripts/inspect_dataset.py \
+  --parquet artifacts/data/raw/code.parquet \
+  --mapping artifacts/data/raw/image-mapping.jsonl \
+  --output-dir artifacts/data \
+  --revision 639865fd3374018d6cb29b9fb82dd531406fcf5f \
+  --strict-provenance --write-samples
 ```
 
-`inspect_dataset.py` writes `schema.json`, `sample_records.json`, `validation_summary.json`, and `provenance.json`. It preserves source row indices for malformed JSON, missing or duplicate identifiers, invalid prompt/message types, empty prompts, and mapping parse failures. It exits nonzero when those validation errors are found. The mapping report derives the observed `dataset_image` → `dockerhub_image` relationship from the file; it does not invent task image names or a verifier registry.
+`inspect_dataset.py` writes `schema.json`, `sample_records_summary.json`, `validation_summary.json`, and `provenance.json` by default. It preserves source row indices for malformed JSON, missing or duplicate identifiers, invalid prompt/reward/extra types, empty prompts or images, and mapping failures. `--write-samples` writes complete local samples only when explicitly requested. `--strict-provenance` requires the auto-discovered `download_manifest.json` beside the inputs (or a path supplied with `--manifest`) and fails on dataset, revision, filename, size, or SHA-256 mismatch. Without a manifest, structural checks remain available but provenance is reported as `UNVERIFIED`. The mapping report derives the observed `dataset_image` → `dockerhub_image` relationship from the file; it does not invent task image names or a verifier registry.
 
 ## Scope boundary
 
